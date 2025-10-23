@@ -1,9 +1,10 @@
-import Image from "next/image";
+// src/app/page.tsx (Server Component)
+import { redirect } from "next/navigation";
 
 export default function Home() {
-  return (
-    <main className="flex min-h-screen items-center justify-center bg-emerald-950 text-3xl font-bold">
-      ¡Hola Catita desde Next.js + Tailwind! 🌿
-    </main>
-  );
+  // Elige a dónde quieres que vaya la home por defecto
+  // Para colaboradores:
+  redirect("/solicitudes");
+  // Si prefieres que abra el panel de Eli:
+  // redirect("/admin/solicitudes");
 }
