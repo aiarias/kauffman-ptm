@@ -1,6 +1,7 @@
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase";
 
 export default async function AdminSolicitudesPage() {
+  const supabase = await createClient();
   const { data: rows, error } = await supabase
     .from("requests")
     .select("*")
