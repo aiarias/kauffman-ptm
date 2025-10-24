@@ -6,10 +6,12 @@ import Link from "next/link";
 // Si no hay fila o está closed, usamos notFound() → Next muestra 404.
 // Renderiza todos los datos; el botón queda “placeholder” por ahora (sin "use client" aún).
 
-type Props = { params: { id: string } };
+// 👇 En Next 15, params en server components viene como Promise<...>
+type Props = { params: Promise<{ id: string }> };
 
 export default async function SolicitudDetailPage({ params }: Props) {
-  const row = await getRequestById(params.id);
+  const { id } = await params; // ← importante
+  const row = await getRequestById(id);
 
   if (!row || row.status !== "open") {
     // Si no existe o está cerrada, 404
