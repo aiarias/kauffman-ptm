@@ -1,6 +1,6 @@
 // src/app/solicitudes/page.tsx
 import Link from "next/link";
-import { getOpenRequests } from "@/lib/data";
+import { getOpenRequests, type RequestRow } from "@/lib/data";
 
 export const revalidate = 30; // ISR
 
@@ -21,7 +21,7 @@ export default async function SolicitudesPage() {
           </p>
         )}
 
-        {rows.map((r) => (
+        {rows.map((r: RequestRow) => (
           <article
             key={r.id}
             className="rounded-lg border p-4 hover:bg-accent/30 transition"
