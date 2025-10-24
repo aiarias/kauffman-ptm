@@ -1,8 +1,20 @@
-export default function SolicitudesAbiertas() {
+"use client";
+import { useEffect } from "react";
+import { supabase } from "@/lib/supabase";
+
+export default function SolicitudesPage() {
+  useEffect(() => {
+    console.log("URL:", process.env.NEXT_PUBLIC_SUPABASE_URL);
+    console.log(
+      "KEY:",
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.slice(0, 8) + "…"
+    );
+  }, []);
+
   return (
-    <div className="space-y-2">
-      <h1 className="text-2xl font-bold">Solicitudes abiertas</h1>
-      <p className="text-muted-foreground">Postula a los turnos disponibles.</p>
-    </div>
+    <main className="p-4">
+      <h1 className="text-xl font-bold">Solicitudes abiertas</h1>
+      <p>Postula a los turnos disponibles.</p>
+    </main>
   );
 }
