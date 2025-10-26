@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import AuthButton from "@/components/AuthButton"; // 👈 importamos el botón
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -23,11 +24,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="es">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50`}
       >
-        {children}
+        {/* 👇 Cabecera común a todas las páginas */}
+        <header className="flex justify-between items-center px-6 py-4 border-b bg-white shadow-sm">
+          <h1 className="text-lg font-semibold text-gray-800">Kaufmann</h1>
+          <AuthButton />
+        </header>
+
+        {/* 👇 Contenido de cada página */}
+        <main className="p-6">{children}</main>
       </body>
     </html>
   );
