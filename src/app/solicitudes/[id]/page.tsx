@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getRequestById } from "@/lib/data";
 import Link from "next/link";
+import PostularButton from "./PostularButton";
 
 // Es un Server Component que llama a getRequestById.
 // Si no hay fila o está closed, usamos notFound() → Next muestra 404.
@@ -17,6 +18,8 @@ export default async function SolicitudDetailPage({ params }: Props) {
     // Si no existe o está cerrada, 404
     notFound();
   }
+
+  const sinCupos = row.slots_taken >= row.slots_total;
 
   return (
     <main className="max-w-2xl mx-auto p-6 space-y-4">
@@ -43,16 +46,7 @@ export default async function SolicitudDetailPage({ params }: Props) {
         Cupos: {row.slots_taken}/{row.slots_total}
       </div>
 
-      {/* El botón real de postulación lo agregamos en el próximo paso */}
-      <button
-        className="mt-4 inline-flex items-center rounded-md border px-3 py-2 text-sm font-medium hover:bg-accent disabled:opacity-50"
-        disabled={row.slots_taken >= row.slots_total}
-        title={
-          row.slots_taken >= row.slots_total ? "Sin cupos" : "Próximamente"
-        }
-      >
-        Postular (próximo paso)
-      </button>
+      <PostularButton requestId={id} disabled={sinCupos} />
     </main>
   );
 }
