@@ -1,10 +1,13 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import { useEffect, useState } from "react";
 
 export default function AuthButton() {
+  const router = useRouter();
   const [userEmail, setUserEmail] = useState<string | null>(null);
+
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -20,11 +23,17 @@ export default function AuthButton() {
     const email = prompt("Ingresa tu email para recibir un link mágico:");
     if (!email) return;
 
+    // Si estás en el browser, usamos el origen real (localhost o vercel)
+    const origin =
+      (typeof window !== "undefined" && window.location.origin) ||
+      process.env.NEXT_PUBLIC_SITE_URL || // opcional (fallback)
+      "http://localhost:3000";
+
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        // 👇 Redirige al callback que intercambia el código por sesión
-        emailRedirectTo: `${location.origin}/auth/callback`,
+        // Redirige a /auth/callback después de iniciar sesión
+        emailRedirectTo: `${origin.replace(/\/$/, "")}/auth/callback`,
       },
     });
 
@@ -35,6 +44,7 @@ export default function AuthButton() {
   async function signOut() {
     await supabase.auth.signOut();
     setUserEmail(null);
+    router.push("/");
   }
 
   return (
