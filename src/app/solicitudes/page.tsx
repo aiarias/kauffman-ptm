@@ -1,10 +1,24 @@
 // src/app/solicitudes/page.tsx
+import { redirect } from "next/navigation";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase-server";
 import { getOpenRequests, type RequestRow } from "@/lib/data";
 
 export const revalidate = 30; // ISR
 
 export default async function SolicitudesPage() {
+  // 1) Guard de autenticación (Server Component)
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    // si no hay sesión → al login
+    redirect("/auth/signin");
+  }
+
+  // 2) Datos de la página (igual que antes)
   const rows = await getOpenRequests();
 
   return (

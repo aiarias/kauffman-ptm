@@ -1,43 +1,39 @@
+// src/app/auth/callback/route.ts
 import { NextResponse, NextRequest } from "next/server";
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import { createClient } from "@/lib/supabase-server";
 
-// Redirige a donde quieras volver después de iniciar sesión
 const AFTER_LOGIN = "/solicitudes";
 
 export async function GET(req: NextRequest) {
-  const requestUrl = new URL(req.url);
-  const code = requestUrl.searchParams.get("code");
+  const url = new URL(req.url);
+  const code = url.searchParams.get("code") ?? undefined;
 
-  // Preparamos una respuesta para poder escribir cookies
-  const res = NextResponse.redirect(new URL(AFTER_LOGIN, requestUrl.origin));
+  // Redirigimos al final del handler
+  const res = NextResponse.redirect(new URL(AFTER_LOGIN, url.origin));
 
-  // Cliente de Supabase en contexto de Route Handler (con set/remove que escriben cookies en la Response)
-  const cookieStore = await cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
-        },
-        set(name: string, value: string, options: any) {
-          res.cookies.set({ name, value, ...options });
-        },
-        remove(name: string, options: any) {
-          res.cookies.set({ name, value: "", ...options, maxAge: 0 });
-        },
-      },
-    }
-  );
+  // Cliente SSR que LE/ESCRIBE cookies en la Response
+  const supabase = await createClient(res);
 
   if (code) {
-    // Intercambiamos el code del email por una sesión y (muy importante) se setean las cookies en la response
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (error) {
-      // Si algo falla, puedes redirigir a una página de error o al login
+      // Puedes leer este header en UI para mostrar mensaje
       res.headers.set("x-auth-error", error.message);
+      return res;
+    }
+
+    // Opcional: asegurar fila en public.users
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (user) {
+      await supabase
+        .from("users")
+        .upsert(
+          { id: user.id, email: user.email?.toLowerCase() ?? null },
+          { onConflict: "id" }
+        );
     }
   }
 

@@ -1,72 +1,73 @@
+// src/components/AuthButton.tsx
 "use client";
 
-import { useRouter } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { createBrowserClient } from "@supabase/ssr";
+import { Button } from "@/components/ui/button";
 
 export default function AuthButton() {
+  // 1) HOOKS SIEMPRE ARRIBA y SIN CONDICIONALES
+  const pathname = usePathname();
   const router = useRouter();
-  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [email, setEmail] = useState<string | null>(null);
 
+  // Cliente solo navegador
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
+  // 2) Efectos sin condiciones
   useEffect(() => {
+    let alive = true;
+
     supabase.auth.getUser().then(({ data }) => {
-      setUserEmail(data.user?.email ?? null);
+      if (alive) setEmail(data.user?.email ?? null);
     });
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
+      setEmail(session?.user?.email ?? null);
+    });
+
+    return () => {
+      alive = false;
+      sub?.subscription.unsubscribe();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function signIn() {
-    const email = prompt("Ingresa tu email para recibir un link mágico:");
-    if (!email) return;
+  // 3) Oculta el bloque en páginas /auth/* (después de hooks)
+  const hideOnAuthPages = pathname?.startsWith("/auth");
+  if (hideOnAuthPages) return null;
 
-    // Si estás en el browser, usamos el origen real (localhost o vercel)
-    const origin =
-      (typeof window !== "undefined" && window.location.origin) ||
-      process.env.NEXT_PUBLIC_SITE_URL || // opcional (fallback)
-      "http://localhost:3000";
-
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        // Redirige a /auth/callback después de iniciar sesión
-        emailRedirectTo: `${origin.replace(/\/$/, "")}/auth/callback`,
-      },
-    });
-
-    if (error) alert(error.message);
-    else alert("✅ Revisa tu correo para continuar.");
-  }
-
-  async function signOut() {
+  // 4) Acciones
+  async function handleSignOut() {
     await supabase.auth.signOut();
-    setUserEmail(null);
-    router.push("/");
+    router.push("/auth/signin");
+    router.refresh();
   }
 
-  return (
+  // 5) Render
+  return email ? (
     <div className="flex items-center gap-2 text-sm">
-      {userEmail ? (
-        <>
-          <span className="text-gray-500">Hola, {userEmail}</span>
-          <button
-            onClick={signOut}
-            className="underline text-blue-600 hover:text-blue-800"
-          >
-            Cerrar sesión
-          </button>
-        </>
-      ) : (
-        <button
-          onClick={signIn}
-          className="underline text-blue-600 hover:text-blue-800"
-        >
-          Iniciar sesión
-        </button>
-      )}
+      <span className="text-muted-foreground hidden sm:inline">
+        Hola, {email}
+      </span>
+      <Button variant="ghost" size="sm" onClick={handleSignOut}>
+        Cerrar sesión
+      </Button>
+    </div>
+  ) : (
+    <div className="flex items-center gap-2 text-sm">
+      <Link className="underline" href="/auth/signin">
+        Iniciar sesión
+      </Link>
+      <span>/</span>
+      <Link className="underline" href="/auth/signup">
+        Registrarse
+      </Link>
     </div>
   );
 }

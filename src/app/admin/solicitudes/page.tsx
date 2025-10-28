@@ -1,26 +1,25 @@
-import { createClient } from "@/lib/supabase";
+import { requireRole } from "@/lib/auth";
 
-export default async function AdminSolicitudesPage() {
-  const supabase = await createClient();
-  const { data: rows, error } = await supabase
-    .from("requests")
-    .select("*")
-    .order("starts_at", { ascending: true });
+export const dynamic = "force-dynamic"; // opcional para evitar cache
 
-  if (error) return <pre className="p-6 text-red-600">{error.message}</pre>;
+export default async function AdminPage() {
+  // Permite admin y superadmin
+  const { user, role, fullName } = await requireRole(["admin", "superadmin"]);
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Solicitudes (Admin)</h1>
-      <p className="text-muted-foreground">Crear y gestionar solicitudes.</p>
-      <ul className="list-disc pl-6">
-        {rows?.map((r) => (
-          <li key={r.id}>
-            {r.title} — {new Date(r.starts_at).toLocaleString()} ({r.slots}{" "}
-            cupos)
-          </li>
-        ))}
-      </ul>
-    </div>
+    <main className="max-w-4xl mx-auto p-6 space-y-4">
+      <h1 className="text-2xl font-bold">Panel Admin</h1>
+      <p className="text-sm text-muted-foreground">
+        Bienvenido {fullName ?? user.email} · Rol: {role}
+      </p>
+
+      <div className="rounded-lg border p-4">
+        <ul className="list-disc pl-5 space-y-1">
+          <li>Crear/editar solicitudes (turnos/eventos)</li>
+          <li>Revisar postulaciones</li>
+          <li>Elegir/confirmar part-time para un turno</li>
+        </ul>
+      </div>
+    </main>
   );
 }
