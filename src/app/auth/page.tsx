@@ -19,38 +19,48 @@ export default function AuthPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage("");
-    setBusy(true);
 
-    try {
-      if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: { name },
-            // el callback creará la fila en public.users y redirigirá según rol
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
-          },
-        });
-        if (error) throw error;
-        setMessage("✅ Te enviamos un correo para confirmar tu registro.");
-      } else {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (error) throw error;
-        if (!data.user) {
-          setMessage("No se pudo obtener el usuario");
-          return;
-        }
-        // Siempre vamos a /solicitudes; allí el server redirige según rol
-        router.push("/solicitudes");
+    if (mode === "signup") {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { name },
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (error) return setMessage(error.message);
+      setMessage("✅ Te enviamos un correo para confirmar tu registro.");
+    } else {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error) return setMessage(error.message);
+
+      const user = data.user;
+      if (!user) {
+        setMessage("No se pudo obtener el usuario.");
+        return;
       }
-    } catch (err: any) {
-      setMessage(err.message ?? "Error de autenticación");
-    } finally {
-      setBusy(false);
+
+      const { data: profile, error: profileError } = await supabase
+        .from("users")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (profileError) {
+        console.error("Error cargando perfil:", profileError);
+      }
+
+      const role = profile?.role ?? "user";
+
+      let redirectTo = "/solicitudes";
+      if (role === "admin") redirectTo = "/admin/solicitudes";
+      if (role === "superadmin") redirectTo = "/superadmin";
+
+      router.push(redirectTo);
     }
   };
 

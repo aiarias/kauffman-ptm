@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase-server";
+import { requireRole } from "@/lib/auth";
 
 function getPayloadFromForm(formData: FormData) {
   const title = String(formData.get("title") || "").trim();
@@ -94,4 +95,68 @@ export async function deleteRequest(id: string) {
 
   revalidatePath("/solicitudes");
   revalidatePath("/admin/solicitudes");
+}
+
+export async function updateApplicationStatus(formData: FormData) {
+  await requireRole(["admin", "superadmin"]);
+
+  const requestId = String(formData.get("request_id") ?? "");
+  const applicationId = String(formData.get("application_id") ?? "");
+  const status = String(formData.get("status") ?? "");
+
+  if (!requestId || !applicationId || !status) {
+    console.error("updateApplicationStatus: datos incompletos");
+    return;
+  }
+
+  if (!["pending", "accepted", "rejected"].includes(status)) {
+    console.error("updateApplicationStatus: status inválido:", status);
+    return;
+  }
+
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("applications")
+    .update({ status })
+    .eq("id", applicationId)
+    .eq("request_id", requestId);
+
+  if (error) {
+    console.error("updateApplicationStatus error:", error);
+  }
+
+  // refrescar panel admin + vista pública
+  revalidatePath(`/admin/solicitudes/${requestId}`);
+  revalidatePath("/admin/solicitudes");
+  revalidatePath("/solicitudes");
+}
+
+export async function deleteApplication(formData: FormData) {
+  await requireRole(["admin", "superadmin"]);
+
+  const requestId = String(formData.get("request_id") ?? "");
+  const applicationId = String(formData.get("application_id") ?? "");
+
+  if (!requestId || !applicationId) {
+    console.error("deleteApplication: datos incompletos");
+    return;
+  }
+
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("applications")
+    .delete()
+    .eq("id", applicationId)
+    .eq("request_id", requestId);
+
+  if (error) {
+    console.error("deleteApplication error:", error);
+  }
+
+  // refrescar panel admin + listado + vista pública
+  revalidatePath(`/admin/solicitudes/${requestId}`);
+  revalidatePath("/admin/solicitudes");
+  revalidatePath("/solicitudes");
 }
