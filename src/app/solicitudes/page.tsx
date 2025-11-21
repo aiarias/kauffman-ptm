@@ -8,6 +8,8 @@ export const dynamic = "force-dynamic";
 export default async function SolicitudesPage() {
   // 1) Autenticación
   const supabase = await createClient();
+
+  // 1) Usuario autenticado
   const {
     data: { user },
   } = await supabase.auth.getUser();
