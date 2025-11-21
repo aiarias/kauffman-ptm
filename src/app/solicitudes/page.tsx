@@ -4,21 +4,43 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase-server";
 import { getOpenRequests, type RequestRow } from "@/lib/data";
 
-export const revalidate = 30; // ISR
+// Para páginas con lógica de auth, mejor siempre dinámico
+export const dynamic = "force-dynamic";
 
 export default async function SolicitudesPage() {
-  // 1) Guard de autenticación (Server Component)
   const supabase = await createClient();
+
+  // 1) Usuario autenticado
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) {
-    // si no hay sesión → al login
     redirect("/auth/signin");
   }
 
-  // 2) Datos de la página (igual que antes)
+  // 2) Leer rol y LOGUEAR para ver qué pasa
+  const { data: profile, error: profileError } = await supabase
+    .from("users")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  console.log("solicitudes > user.id =", user.id);
+  console.log("solicitudes > profile =", profile);
+  console.log("solicitudes > profileError =", profileError);
+
+  const role = profile?.role?.toLowerCase();
+
+  if (role === "superadmin") {
+    redirect("/superadmin");
+  }
+
+  if (role === "admin") {
+    redirect("/admin/solicitudes");
+  }
+
+  // 3) Datos de la página (solo para usuarios NO admin/superadmin)
   const rows = await getOpenRequests();
 
   return (
@@ -81,6 +103,7 @@ function formatDate(iso: string) {
     month: "short",
   });
 }
+
 function hhmm(time: string) {
   return time.slice(0, 5);
 }

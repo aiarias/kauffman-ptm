@@ -1,41 +1,72 @@
 // src/app/auth/callback/route.ts
-import { NextResponse, NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 
-const AFTER_LOGIN = "/solicitudes";
+const DEFAULT_AFTER_LOGIN = "/solicitudes";
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const code = url.searchParams.get("code") ?? undefined;
 
-  // Redirigimos al final del handler
-  const res = NextResponse.redirect(new URL(AFTER_LOGIN, url.origin));
+  // Respuesta temporal SOLO para que Supabase pueda escribir cookies
+  const cookieRes = new NextResponse();
 
-  // Cliente SSR que LE/ESCRIBE cookies en la Response
-  const supabase = await createClient(res);
+  const supabase = await createClient(cookieRes);
 
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (error) {
-      // Puedes leer este header en UI para mostrar mensaje
-      res.headers.set("x-auth-error", error.message);
-      return res;
-    }
-
-    // Opcional: asegurar fila en public.users
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (user) {
-      await supabase
-        .from("users")
-        .upsert(
-          { id: user.id, email: user.email?.toLowerCase() ?? null },
-          { onConflict: "id" }
-        );
+      // si hay error, redirigimos al login con el mensaje
+      const errorUrl = new URL(
+        `/auth/signin?error=${encodeURIComponent(error.message)}`,
+        url.origin
+      );
+      const errorRedirect = NextResponse.redirect(errorUrl, {
+        headers: cookieRes.headers,
+      });
+      return errorRedirect;
     }
   }
 
-  return res;
+  // Obtener usuario autenticado
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  let redirectPath = DEFAULT_AFTER_LOGIN;
+
+  if (user) {
+    // asegurar fila en public.users
+    await supabase.from("users").upsert(
+      {
+        id: user.id,
+        email: user.email?.toLowerCase() ?? null,
+      },
+      { onConflict: "id" }
+    );
+
+    // leer rol
+    const { data: profile } = await supabase
+      .from("users")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profile?.role === "superadmin") {
+      redirectPath = "/superadmin";
+    } else if (profile?.role === "admin") {
+      redirectPath = "/admin/solicitudes";
+    } else {
+      redirectPath = "/solicitudes"; // user normal
+    }
+  }
+
+  const finalRedirect = NextResponse.redirect(
+    new URL(redirectPath, url.origin),
+    {
+      headers: cookieRes.headers, // copiamos cookies de Supabase
+    }
+  );
+
+  return finalRedirect;
 }
