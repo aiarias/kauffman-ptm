@@ -1,3 +1,4 @@
+// src/app/auth/page.tsx
 "use client";
 
 import { useState } from "react";
@@ -13,29 +14,43 @@ export default function AuthPage() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage("");
+    setBusy(true);
 
-    if (mode === "signup") {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { name },
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
-      if (error) return setMessage(error.message);
-      setMessage("✅ Te enviamos un correo para confirmar tu registro.");
-    } else {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      if (error) return setMessage(error.message);
-      router.push("/solicitudes");
+    try {
+      if (mode === "signup") {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { name },
+            // el callback creará la fila en public.users y redirigirá según rol
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
+          },
+        });
+        if (error) throw error;
+        setMessage("✅ Te enviamos un correo para confirmar tu registro.");
+      } else {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (error) throw error;
+        if (!data.user) {
+          setMessage("No se pudo obtener el usuario");
+          return;
+        }
+        // Siempre vamos a /solicitudes; allí el server redirige según rol
+        router.push("/solicitudes");
+      }
+    } catch (err: any) {
+      setMessage(err.message ?? "Error de autenticación");
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -84,9 +99,16 @@ export default function AuthPage() {
 
           <button
             type="submit"
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg"
+            disabled={busy}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg disabled:opacity-60"
           >
-            {mode === "login" ? "Entrar" : "Registrarme"}
+            {busy
+              ? mode === "login"
+                ? "Entrando..."
+                : "Registrando..."
+              : mode === "login"
+              ? "Entrar"
+              : "Registrarme"}
           </button>
         </form>
 
@@ -99,6 +121,7 @@ export default function AuthPage() {
             <>
               ¿No tienes cuenta?{" "}
               <button
+                type="button"
                 onClick={() => setMode("signup")}
                 className="text-blue-600 hover:underline"
               >
@@ -109,6 +132,7 @@ export default function AuthPage() {
             <>
               ¿Ya tienes cuenta?{" "}
               <button
+                type="button"
                 onClick={() => setMode("login")}
                 className="text-blue-600 hover:underline"
               >
