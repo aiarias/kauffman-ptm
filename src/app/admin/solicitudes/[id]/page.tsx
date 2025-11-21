@@ -1,3 +1,4 @@
+// src/app/admin/solicitudes/[id]/page.tsx
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase-server";
 import { requireRole } from "@/lib/auth";
@@ -6,10 +7,14 @@ import { updateRequest } from "../actions";
 export const dynamic = "force-dynamic";
 
 interface Props {
-  params: { id: string };
+  // 👇 ahora params es una Promise
+  params: Promise<{ id: string }>;
 }
 
 export default async function EditSolicitudPage({ params }: Props) {
+  // 👇 hacemos await a params y sacamos el id
+  const { id } = await params;
+
   await requireRole(["admin", "superadmin"]);
 
   const supabase = await createClient();
@@ -17,7 +22,7 @@ export default async function EditSolicitudPage({ params }: Props) {
   const { data: request, error } = await supabase
     .from("requests")
     .select("*")
-    .eq("id", params.id)
+    .eq("id", id) // usamos id, no params.id
     .maybeSingle();
 
   if (error) {
@@ -32,7 +37,7 @@ export default async function EditSolicitudPage({ params }: Props) {
     <main className="max-w-3xl mx-auto p-6 space-y-4">
       <h1 className="text-2xl font-bold">Editar solicitud</h1>
 
-      <form action={updateRequest.bind(null, params.id)} className="space-y-4">
+      <form action={updateRequest.bind(null, id)} className="space-y-4">
         <div>
           <label className="block text-sm font-medium mb-1">Título</label>
           <input

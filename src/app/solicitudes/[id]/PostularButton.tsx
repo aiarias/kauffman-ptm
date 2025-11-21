@@ -2,16 +2,16 @@
 "use client";
 
 import { useActionState } from "react";
-import { useFormStatus } from "react-dom"; // <- si lo usas para "isPending"
+import { useFormStatus } from "react-dom";
 import { postularARequest, type PostularState } from "../actions";
 
 type Props = {
   requestId: string;
-  disabled?: boolean; // cuando no hay cupos, etc.
+  disabled?: boolean;
 };
 
 export default function PostularButton({ requestId, disabled }: Props) {
-  const initialState = { ok: false, message: "" };
+  const initialState: PostularState = { ok: false, message: "" };
   const [state, formAction] = useActionState(postularARequest, initialState);
 
   return (
@@ -19,7 +19,8 @@ export default function PostularButton({ requestId, disabled }: Props) {
       {/* Garantiza que la server action reciba el id */}
       <input type="hidden" name="request_id" value={requestId} />
 
-      <SubmitButton disabled={disabled} />
+      {/* 🔴 Solo mostramos el botón mientras NO se haya postulado correctamente */}
+      {!state.ok && <SubmitButton disabled={disabled} />}
 
       {/* Mensaje de respuesta */}
       {state.message && (

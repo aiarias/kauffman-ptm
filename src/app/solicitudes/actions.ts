@@ -14,7 +14,7 @@ export async function postularARequest(
 ): Promise<PostularState> {
   const supabase = await createClient();
 
-  // 1) Id de la solicitud que viene del input hidden
+  // 1) Id de la solicitud desde el formulario
   const requestId = String(formData.get("request_id") ?? "");
   if (!requestId) {
     return { ok: false, message: "Solicitud inválida." };
@@ -30,17 +30,41 @@ export async function postularARequest(
     return { ok: false, message: "Debes iniciar sesión para postular." };
   }
 
-  // 3) Insertar en applications
-  // ⚠️ MUY IMPORTANTE:
-  //    Cambia "user_id" y "request_id" si en tu tabla se llaman distinto.
+  // 3) ¿Ya existe una postulación de este usuario a esta solicitud?
+  const { data: existing, error: existingError } = await supabase
+    .from("applications")
+    .select("id, status")
+    .eq("request_id", requestId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!existingError && existing) {
+    // Si quieres permitir re-postular cuando status = 'cancelled',
+    // aquí podrías hacer una excepción. Por ahora, bloqueamos siempre.
+    return {
+      ok: false,
+      message: "Ya has postulado a este turno.",
+    };
+  }
+
+  // 4) Insertar la nueva postulación
   const { error } = await supabase.from("applications").insert({
-    request_id: requestId, // nombre de la FK en public.applications
-    user_id: user.id, // columna donde guardas el usuario
-    status: "pending", // quítalo si no tienes columna status
+    request_id: requestId,
+    user_id: user.id,
+    status: "pending", // quítalo si no tienes esta columna
   });
 
   if (error) {
     console.error("Error al postular:", error);
+
+    // Defensa extra por si la BD lanza 'unique violation'
+    if ((error as any).code === "23505") {
+      return {
+        ok: false,
+        message: "Ya habías postulado a este turno.",
+      };
+    }
+
     return { ok: false, message: "No se pudo postular." };
   }
 
