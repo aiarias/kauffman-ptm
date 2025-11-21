@@ -1,3 +1,4 @@
+// src/app/auth/signin/page.tsx
 "use client";
 import { useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
@@ -15,13 +16,43 @@ export default function SignInPage() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
-    const { error } = await supabase.auth.signInWithPassword({
+
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
+
     setBusy(false);
-    if (error) return alert(error.message);
-    window.location.href = "/solicitudes";
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    // 🔹 Buscar el rol del usuario en public.users
+    const user = data.user;
+    if (!user) {
+      alert("No se pudo obtener el usuario.");
+      return;
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from("users")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profileError) {
+      console.error("Error cargando perfil:", profileError);
+    }
+
+    const role = profile?.role ?? "user";
+
+    let redirectTo = "/solicitudes";
+    if (role === "admin") redirectTo = "/admin/solicitudes";
+    if (role === "superadmin") redirectTo = "/superadmin";
+
+    window.location.href = redirectTo;
   }
 
   return (

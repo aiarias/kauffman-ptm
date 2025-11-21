@@ -1,6 +1,7 @@
 // src/app/solicitudes/actions.ts
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase-server";
 
 export type PostularState = {
@@ -69,4 +70,43 @@ export async function postularARequest(
   }
 
   return { ok: true, message: "Postulación enviada correctamente." };
+}
+
+// 🔴 NUEVA: cancelar postulación del usuario en ese turno
+export async function cancelApplication(
+  prevState: PostularState,
+  formData: FormData
+): Promise<PostularState> {
+  const supabase = await createClient();
+
+  const requestId = String(formData.get("request_id") ?? "");
+  if (!requestId) {
+    return { ok: false, message: "Solicitud inválida." };
+  }
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return { ok: false, message: "Debes iniciar sesión." };
+  }
+
+  const { error } = await supabase
+    .from("applications")
+    .delete()
+    .eq("request_id", requestId)
+    .eq("user_id", user.id);
+
+  if (error) {
+    console.error("cancelApplication error:", error);
+    return { ok: false, message: "No se pudo cancelar tu postulación." };
+  }
+
+  // refrescar lista y detalle
+  revalidatePath("/solicitudes");
+  revalidatePath(`/solicitudes/${requestId}`);
+
+  return { ok: true, message: "Postulación cancelada correctamente." };
 }

@@ -3,20 +3,19 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase-server";
 import PostularButton from "./PostularButton";
+import CancelPostulationButton from "./CancelPostulationButton";
 
 export const dynamic = "force-dynamic";
 
-interface PageProps {
-  // 👈 AHORA params es una Promise
+interface Props {
   params: Promise<{ id: string }>;
 }
 
-export default async function SolicitudDetallePage({ params }: PageProps) {
-  const { id } = await params; // 👈 AQUÍ hacemos el await
-
+export default async function SolicitudDetallePage({ params }: Props) {
+  const { id } = await params; // 👈 importante
   const supabase = await createClient();
 
-  // 1) Asegurar usuario logueado
+  // 1) Usuario actual
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -25,48 +24,58 @@ export default async function SolicitudDetallePage({ params }: PageProps) {
     redirect("/auth/signin");
   }
 
-  // 2) Traer la solicitud
+  // 2) Datos de la solicitud
   const { data: request, error } = await supabase
     .from("requests")
     .select("*")
-    .eq("id", id) // 👈 usamos id, no params.id
+    .eq("id", id)
     .maybeSingle();
 
   if (error) {
-    console.error("request detail error:", error);
+    console.error("request error:", error);
   }
+
   if (!request) {
     notFound();
   }
 
-  // 3) Ver si este usuario ya tiene una postulación a esta solicitud
-  const { data: application } = await supabase
+  // 3) Postulaciones de este turno
+  const { data: apps, error: appsError } = await supabase
     .from("applications")
-    .select("id, status")
-    .eq("request_id", id) // 👈 idem aquí
-    .eq("user_id", user.id)
-    .maybeSingle();
+    .select("id, status, user_id, applied_at")
+    .eq("request_id", id);
 
-  // 4) Texto amigable según estado
+  if (appsError) {
+    console.error("apps error:", appsError);
+  }
+
+  const allApps = apps ?? [];
+
+  const acceptedCount = allApps.filter((a) => a.status === "accepted").length;
+  const myApp = allApps.find((a) => a.user_id === user.id);
+
+  // 4) Mensaje segun estado de mi postulación
   let statusLabel: string | null = null;
-  if (application) {
-    switch (application.status) {
-      case "pending":
-        statusLabel = "Ya estás postulando a este turno. Estado: pendiente.";
-        break;
-      case "accepted":
-        statusLabel = "Fuiste aceptado para este turno 🎉.";
-        break;
-      case "rejected":
-        statusLabel = "Tu postulación fue rechazada.";
-        break;
-      default:
-        statusLabel = `Ya estás postulando a este turno. Estado: ${application.status}.`;
-    }
+  let canPostular = true;
+  let canCancel = false;
+
+  if (myApp?.status === "pending") {
+    statusLabel = "Ya estás postulando a este turno. Estado: pendiente.";
+    canPostular = false;
+    canCancel = true;
+  } else if (myApp?.status === "accepted") {
+    statusLabel = "Fuiste aceptado para este turno 🎉.";
+    canPostular = false;
+    canCancel = true; // si NO quieres que pueda salirse, pon esto en false
+  } else if (myApp?.status === "rejected") {
+    statusLabel =
+      "Tu postulación a este turno fue rechazada. Si tienes dudas, consulta con el administrador.";
+    canPostular = false;
+    canCancel = false;
   }
 
   return (
-    <main className="max-w-2xl mx-auto p-6 space-y-4">
+    <main className="max-w-3xl mx-auto p-6 space-y-4">
       <Link href="/solicitudes" className="text-sm underline">
         ← Volver
       </Link>
@@ -82,21 +91,25 @@ export default async function SolicitudDetallePage({ params }: PageProps) {
         <p className="mt-2 text-sm">{request.description}</p>
       )}
 
-      <p className="mt-2 text-sm text-muted-foreground">
-        Cupos: {request.slots_total}
+      <p className="text-sm font-medium mt-2">
+        Cupos: {acceptedCount} / {request.slots_total}
       </p>
 
-      {application ? (
-        <p className="mt-4 text-sm text-emerald-700">{statusLabel}</p>
-      ) : (
-        // 👇 también aquí usamos id
-        <PostularButton requestId={id} />
+      {statusLabel && (
+        <p className="mt-2 text-sm text-emerald-700">{statusLabel}</p>
       )}
+
+      {/* Botón de postular (se deshabilita si ya tiene postulación) */}
+      <PostularButton requestId={id} disabled={!canPostular} />
+
+      {/* Botón para salirse del turno */}
+      {canCancel && <CancelPostulationButton requestId={id} />}
     </main>
   );
 }
 
 function formatDate(iso: string) {
+  if (!iso) return "";
   const d = new Date(iso + "T00:00:00");
   return d.toLocaleDateString(undefined, {
     weekday: "short",

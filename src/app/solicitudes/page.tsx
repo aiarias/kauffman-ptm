@@ -2,12 +2,11 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase-server";
-import { getOpenRequests, type RequestRow } from "@/lib/data";
 
-// Para páginas con lógica de auth, mejor siempre dinámico
 export const dynamic = "force-dynamic";
 
 export default async function SolicitudesPage() {
+  // 1) Autenticación
   const supabase = await createClient();
 
   // 1) Usuario autenticado
@@ -19,83 +18,97 @@ export default async function SolicitudesPage() {
     redirect("/auth/signin");
   }
 
-  // 2) Leer rol y LOGUEAR para ver qué pasa
-  const { data: profile, error: profileError } = await supabase
-    .from("users")
-    .select("role")
-    .eq("id", user.id)
-    .maybeSingle();
+  // 2) Solicitudes abiertas
+  const { data: requests, error } = await supabase
+    .from("requests")
+    .select("*")
+    .eq("status", "open")
+    .order("shift_date", { ascending: true })
+    .order("start_time", { ascending: true });
 
-  console.log("solicitudes > user.id =", user.id);
-  console.log("solicitudes > profile =", profile);
-  console.log("solicitudes > profileError =", profileError);
-
-  const role = profile?.role?.toLowerCase();
-
-  if (role === "superadmin") {
-    redirect("/superadmin");
+  if (error) {
+    console.error("solicitudes list error:", error);
   }
 
-  if (role === "admin") {
-    redirect("/admin/solicitudes");
+  const reqs = requests ?? [];
+
+  // 3) Postulaciones aceptadas (para contar cupos ocupados)
+  const { data: acceptedApps, error: appsError } = await supabase
+    .from("applications")
+    .select("request_id, status")
+    .eq("status", "accepted");
+
+  if (appsError) {
+    console.error("acceptedApps error:", appsError);
   }
 
-  // 3) Datos de la página (solo para usuarios NO admin/superadmin)
-  const rows = await getOpenRequests();
+  // 4) Mapa request_id -> cantidad aceptados
+  const acceptedMap: Record<string, number> = {};
+  (acceptedApps ?? []).forEach((app) => {
+    const key = (app as any).request_id as string;
+    if (!acceptedMap[key]) acceptedMap[key] = 0;
+    acceptedMap[key]++;
+  });
 
   return (
-    <main className="max-w-3xl mx-auto p-6 space-y-4">
-      <h1 className="text-2xl font-bold">Solicitudes abiertas</h1>
-      <p className="text-sm text-muted-foreground">
-        Postula a los turnos disponibles.
-      </p>
+    <main className="max-w-5xl mx-auto p-6 space-y-4">
+      <header className="space-y-1">
+        <h1 className="text-2xl font-bold">Solicitudes abiertas</h1>
+        <p className="text-sm text-muted-foreground">
+          Postula a los turnos disponibles.
+        </p>
+      </header>
 
-      <div className="space-y-4">
-        {rows.length === 0 && (
-          <p className="text-sm text-muted-foreground">
-            No hay solicitudes por ahora.
-          </p>
-        )}
+      {reqs.length === 0 && (
+        <p className="text-sm text-muted-foreground">
+          No hay solicitudes por ahora.
+        </p>
+      )}
 
-        {rows.map((r: RequestRow) => (
-          <article
-            key={r.id}
-            className="rounded-lg border p-4 hover:bg-accent/30 transition"
-          >
-            <div className="flex items-start justify-between">
-              <h2 className="font-semibold">{r.title}</h2>
-              {r.location && (
-                <span className="text-xs text-muted-foreground">
-                  {r.location}
-                </span>
-              )}
-            </div>
+      {reqs.length > 0 && (
+        <div className="grid gap-4 md:grid-cols-2">
+          {reqs.map((r: any) => {
+            const acceptedCount = acceptedMap[r.id] ?? 0;
 
-            <div className="text-sm text-muted-foreground mt-1">
-              {formatDate(r.shift_date)} · {hhmm(r.start_time)}–
-              {hhmm(r.end_time)}
-            </div>
+            return (
+              <article
+                key={r.id}
+                className="rounded-lg border p-4 hover:bg-accent/30 transition"
+              >
+                <div className="flex items-start justify-between">
+                  <h2 className="font-semibold">{r.title}</h2>
+                </div>
 
-            {r.description && <p className="mt-2 text-sm">{r.description}</p>}
+                <div className="text-sm text-muted-foreground mt-1">
+                  {formatDate(r.shift_date)} · {hhmm(r.start_time)}–
+                  {hhmm(r.end_time)}
+                </div>
 
-            <div className="text-xs text-muted-foreground mt-2">
-              Cupos: {r.slots_taken}/{r.slots_total}
-            </div>
+                {r.description && (
+                  <p className="mt-2 text-sm">{r.description}</p>
+                )}
 
-            <Link
-              href={`/solicitudes/${r.id}`}
-              className="mt-3 inline-block text-sm underline"
-            >
-              Ver detalle / Postular
-            </Link>
-          </article>
-        ))}
-      </div>
+                <div className="text-xs text-muted-foreground mt-2">
+                  Cupos: {acceptedCount} / {r.slots_total}
+                </div>
+
+                <Link
+                  href={`/solicitudes/${r.id}`}
+                  className="mt-3 inline-block text-sm underline"
+                >
+                  Ver detalle / Postular
+                </Link>
+              </article>
+            );
+          })}
+        </div>
+      )}
     </main>
   );
 }
 
 function formatDate(iso: string) {
+  if (!iso) return "";
   const d = new Date(iso + "T00:00:00");
   return d.toLocaleDateString(undefined, {
     weekday: "short",
@@ -105,5 +118,5 @@ function formatDate(iso: string) {
 }
 
 function hhmm(time: string) {
-  return time.slice(0, 5);
+  return time?.slice(0, 5);
 }
